@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PERÚ RESUELVE - Plataforma Nacional de Incidencias Urbanas</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            navy: '#0F172A',
+                            blue: '#1E40AF',
+                            accent: '#2563EB',
+                            urgente: '#EF4444',
+                            pendiente: '#F59E0B',
+                            evaluacion: '#3B82F6',
+                            proceso: '#8B5CF6',
+                            solucionado: '#10B981'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Leaflet CSS & JS para Mapas -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Chart.js para Métricas Analíticas -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        html, body { height: 100%; margin: 0; padding: 0; font-family: 'Inter', sans-serif; overflow: hidden; }
+        #map { height: 100%; width: 100%; z-index: 10; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .urgent-pulse {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            animation: pulse-red 1.8s infinite;
+        }
+        @keyframes pulse-red {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col text-slate-800 antialiased">
+
+    <!-- HEADER / BARRA DE NAVEGACIÓN SUPERIOR -->
+    <header class="bg-brand-navy text-white shadow-md z-30 flex-none border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                
+                <!-- BRAND / LOGO -->
+                <div class="flex items-center space-x-3 cursor-pointer" onclick="switchRole('citizen')">
+                    <div class="bg-gradient-to-tr from-blue-600 to-indigo-500 p-2 rounded-xl shadow-lg flex items-center justify-center">
+                        <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-1.5">
+                            <span class="font-extrabold text-xl tracking-tight text-white">PERÚ</span>
+                            <span class="font-extrabold text-xl tracking-tight text-blue-400">RESUELVE</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 font-medium tracking-wide hidden sm:block">Tu ciudad mejora cuando todos participamos</p>
+                    </div>
+                </div>
+
+                <!-- SWITCH DE MODOS / ROLES DE SIMULACIÓN -->
+                <div class="hidden md:flex items-center bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
+                    <button onclick="switchRole('citizen')" id="btn-role-citizen" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 bg-blue-600 text-white shadow">
+                        <i data-lucide="user" class="w-3.5 h-3.5"></i>
+                        <span>Ciudadano</span>
+                    </button>
+                    <button onclick="switchRole('muni')" id="btn-role-muni" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-all flex items-center space-x-1.5">
+                        <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
+                        <span>Municipalidad</span>
+                    </button>
+                    <button onclick="switchRole('admin')" id="btn-role-admin" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-all flex items-center space-x-1.5">
+                        <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
+                        <span>SaaS Admin</span>
+                    </button>
+                </div>
+
+                <!-- BOTÓN ACCIÓN RÁPIDA / USUARIO -->
+                <div class="flex items-center space-x-3">
+                    <button onclick="openNewReportModal()" class="bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white text-xs sm:text-sm font-semibold px-4 py-2 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center space-x-2 transform active:scale-95">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                        <span>REPORTAR PROBLEMA</span>
+                    </button>
+
+                    <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
+
+                    <div class="flex items-center space-x-2 text-slate-300">
+                        <div class="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center font-bold text-xs text-white">
+                            CM
+                        </div>
+                        <span class="text-xs font-medium hidden lg:inline-block">Carlos M.</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- BARRA ROL MOBILE -->
+        <div class="md:hidden flex bg-slate-900 border-t border-slate-800 text-xs px-2 py-1.5 justify-around">
+            <button onclick="switchRole('citizen')" id="btn-role-citizen-m" class="px-3 py-1 rounded text-blue-400 font-bold">Ciudadano</button>
+            <button onclick="switchRole('muni')" id="btn-role-muni-m" class="px-3 py-1 rounded text-slate-400">Municipalidad</button>
+            <button onclick="switchRole('admin')" id="btn-role-admin-m" class="px-3 py-1 rounded text-slate-400">SaaS Admin</button>
+        </div>
+    </header>
+
+    <!-- CONTENIDO PRINCIPAL ADAPTABLE -->
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative h-[calc(100vh-64px)]">
+
+        <!-- VISTA 1: CIUDADANO (MAPA + LISTA + FILTROS) -->
+        <div id="view-citizen" class="w-full h-full flex flex-col md:flex-row overflow-hidden">
+
+            <aside class="w-full md:w-96 bg-white border-r border-slate-200 flex flex-col z-20 shadow-lg md:relative h-1/2 md:h-full">
+                
+                <div class="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
+                    <div class="relative">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+                        <input type="text" id="search-input" onkeyup="filterReports()" placeholder="Buscar por código, distrito o vía..." class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Categoría</label>
+                            <select id="filter-category" onchange="filterReports()" class="w-full mt-0.5 p-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500">
+                                <option value="ALL">Todas</option>
+                                <option value="Pistas y Vías">Pistas y Vías</option>
+                                <option value="Agua y Desagüe">Agua y Desagüe</option>
+                                <option value="Limpieza y Basura">Limpieza y Basura</option>
+                                <option value="Alumbrado Eléctrico">Alumbrado Eléctrico</option>
+                                <option value="Semáforos y Señales">Semáforos y Señales</option>
+                                <option value="Parques y Ornato">Parques y Ornato</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Estado</label>
+                            <select id="filter-status" onchange="filterReports()" class="w-full mt-0.5 p-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500">
+                                <option value="ALL">Todos los estados</option>
+                                <option value="Urgente">Urgente (Rojo)</option>
+                                <option value="Pendiente">Pendiente (Naranja)</option>
+                                <option value="En evaluación">En Evaluación (Azul)</option>
+                                <option value="En proceso">En Proceso (Morado)</option>
+                                <option value="Solucionado">Solucionado (Verde)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-xs pt-1">
+                        <span class="text-slate-500 font-medium">Ubicación:</span>
+                        <select id="filter-district" onchange="filterReports()" class="bg-transparent font-semibold text-blue-600 focus:outline-none cursor-pointer">
+                            <option value="ALL">Todo el Perú</option>
+                            <option value="Chiclayo">Chiclayo</option>
+                            <option value="Lima">Lima Metropolitana</option>
+                            <option value="Arequipa">Arequipa</option>
+                            <option value="Trujillo">Trujillo</option>
+                            <option value="Cusco">Cusco</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="px-4 py-2 bg-slate-100/70 border-b border-slate-200 text-xs text-slate-500 flex justify-between items-center font-medium">
+                    <span>Incidencias registradas:</span>
+                    <span id="reports-count" class="bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full text-[11px]">0</span>
+                </div>
+
+                <div id="reports-list" class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+                </div>
+            </aside>
+
+            <!-- MAPA LEAFLET -->
+            <div class="flex-1 h-1/2 md:h-full relative">
+                <div id="map"></div>
+
+                <div class="absolute bottom-4 right-4 bg-white/95 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-slate-200 text-xs space-y-1.5 z-[1000] hidden sm:block">
+                    <p class="font-bold text-slate-700 mb-1 border-b pb-1">Estado de incidencias</p>
+                    <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-red-500 inline-block"></span><span class="text-slate-600">Urgente</span></div>
+                    <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span><span class="text-slate-600">Pendiente</span></div>
+                    <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span><span class="text-slate-600">En evaluación</span></div>
+                    <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-purple-500 inline-block"></span><span class="text-slate-600">En proceso</span></div>
+                    <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span><span class="text-slate-600">Solucionado</span></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- VISTA 2: PANEL MUNICIPALIDAD (B2B) -->
+        <div id="view-muni" class="w-full h-full bg-slate-100 hidden overflow-y-auto p-4 md:p-6 custom-scrollbar">
+            <div class="max-w-7xl mx-auto space-y-6">
+                
+                <div class="bg-gradient-to-r from-brand-navy to-slate-800 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="bg-blue-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Módulo Oficial</span>
+                            <span class="text-slate-300 text-xs">Jurisdicción: Municipalidad Provincial de Chiclayo</span>
+                        </div>
+                        <h1 class="text-2xl font-bold mt-1">Gestión Institucional de Incidencias Urbanas</h1>
+                        <p class="text-slate-300 text-xs mt-1">Atención, asignación de cuadrillas y respuesta oficial a reportes ciudadanos.</p>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="exportData()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                            <span>Exportar Datos</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Asignadas a mi municipalidad</p>
+                        <p class="text-2xl font-bold text-slate-800 mt-1" id="muni-kpi-total">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-amber-500">
+                        <p class="text-xs font-medium text-slate-500">Pendientes de atención</p>
+                        <p class="text-2xl font-bold text-amber-600 mt-1" id="muni-kpi-pending">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-purple-500">
+                        <p class="text-xs font-medium text-slate-500">En Proceso / Cuadrilla</p>
+                        <p class="text-2xl font-bold text-purple-600 mt-1" id="muni-kpi-process">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
+                        <p class="text-xs font-medium text-slate-500">Resueltas este mes</p>
+                        <p class="text-2xl font-bold text-emerald-600 mt-1" id="muni-kpi-solved">0</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                        <h3 class="font-bold text-slate-800 text-sm">Bandeja de Entrada de Incidencias</h3>
+                        <span class="text-xs text-slate-500">Filtro activo: Chiclayo y distritos colindantes</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100/70 text-slate-600 text-[11px] font-bold uppercase border-b border-slate-200">
+                                    <th class="p-3">Código</th>
+                                    <th class="p-3">Incidencia</th>
+                                    <th class="p-3">Distrito</th>
+                                    <th class="p-3">Prioridad / Apoyos</th>
+                                    <th class="p-3">Estado Actual</th>
+                                    <th class="p-3 text-right">Acción Oficial</th>
+                                </tr>
+                            </thead>
+                            <tbody id="muni-table-body" class="divide-y divide-slate-100 text-xs text-slate-700">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- VISTA 3: PANEL ADMINISTRACIÓN SAAS -->
+        <div id="view-admin" class="w-full h-full bg-slate-900 hidden text-white overflow-y-auto p-4 md:p-6 custom-scrollbar">
+            <div class="max-w-7xl mx-auto space-y-6">
+                
+                <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+                            <i data-lucide="layout-dashboard" class="text-blue-400"></i>
+                            Panel de Control Nacional SaaS
+                        </h1>
+                        <p class="text-slate-400 text-xs">PERÚ RESUELVE - Métricas consolidadas del sistema y clientes SaaS</p>
+                    </div>
+                    <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span class="text-slate-300 font-medium">Servicios 100% Operativos</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-slate-800/80 border border-slate-700/70 p-4 rounded-xl">
+                        <span class="text-xs text-slate-400">Total Reportes Nacionales</span>
+                        <p class="text-2xl font-black text-white mt-1" id="saas-total-reports">0</p>
+                        <span class="text-[10px] text-emerald-400 font-medium">↑ +14% esta semana</span>
+                    </div>
+                    <div class="bg-slate-800/80 border border-slate-700/70 p-4 rounded-xl">
+                        <span class="text-xs text-slate-400">Municipalidades Suscritas</span>
+                        <p class="text-2xl font-black text-blue-400 mt-1">18 / 1,874</p>
+                        <span class="text-[10px] text-slate-400">Plan Enterprise SaaS</span>
+                    </div>
+                    <div class="bg-slate-800/80 border border-slate-700/70 p-4 rounded-xl">
+                        <span class="text-xs text-slate-400">Tasa de Solución Global</span>
+                        <p class="text-2xl font-black text-emerald-400 mt-1" id="saas-resolution-rate">0%</p>
+                        <span class="text-[10px] text-slate-400">Meta recomendada: >65%</span>
+                    </div>
+                    <div class="bg-slate-800/80 border border-slate-700/70 p-4 rounded-xl">
+                        <span class="text-xs text-slate-400">Tiempo Promedio Atención</span>
+                        <p class="text-2xl font-black text-amber-400 mt-1">3.2 días</p>
+                        <span class="text-[10px] text-slate-400">Reducción de 45% vs manual</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-slate-800/60 border border-slate-700 p-5 rounded-2xl">
+                        <h4 class="text-sm font-bold text-slate-200 mb-4 flex items-center justify-between">
+                            <span>Distribución por Categorías</span>
+                            <i data-lucide="pie-chart" class="w-4 h-4 text-blue-400"></i>
+                        </h4>
+                        <div class="h-64 relative">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-800/60 border border-slate-700 p-5 rounded-2xl">
+                        <h4 class="text-sm font-bold text-slate-200 mb-4 flex items-center justify-between">
+                            <span>Evolución Mensual de Incidencias</span>
+                            <i data-lucide="trending-up" class="w-4 h-4 text-emerald-400"></i>
+                        </h4>
+                        <div class="h-64 relative">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- MODAL REGISTRO DE REPORTE -->
+    <div id="modal-report" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[2000] hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-brand-navy text-white px-6 py-4 flex justify-between items-center flex-none">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400"></i>
+                    <h3 class="font-bold text-base">Registrar Incidencia Urbana</h3>
+                </div>
+                <button onclick="closeNewReportModal()" class="text-slate-400 hover:text-white transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="form-new-report" onsubmit="handleCreateReport(event)" class="p-6 overflow-y-auto space-y-4 text-xs flex-1 custom-scrollbar">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Categoría del problema *</label>
+                    <select id="form-category" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 font-medium">
+                        <option value="">-- Seleccionar Categoría --</option>
+                        <option value="Pistas y Vías">Pistas y Vías (Huecos, grietas)</option>
+                        <option value="Agua y Desagüe">Agua y Desagüe (Fugas, colapsos)</option>
+                        <option value="Limpieza y Basura">Limpieza y Basura (Acumulación)</option>
+                        <option value="Alumbrado Eléctrico">Alumbrado Eléctrico (Postes, cables)</option>
+                        <option value="Semáforos y Señales">Semáforos y Señalización</option>
+                        <option value="Parques y Ornato">Parques y Ornato abandonados</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Fotografía del problema *</label>
+                    <div class="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center bg-slate-50 hover:bg-slate-100 transition cursor-pointer relative" onclick="triggerFileInput()">
+                        <input type="file" id="form-image-input" accept="image/*" class="hidden" onchange="previewImage(event)">
+                        <div id="image-preview-container" class="space-y-1">
+                            <i data-lucide="camera" class="w-8 h-8 text-slate-400 mx-auto"></i>
+                            <p class="text-slate-600 font-medium">Haz clic para capturar o subir una foto</p>
+                            <p class="text-[10px] text-slate-400">JPG, PNG hasta 10MB</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Distrito / Ciudad *</label>
+                        <select id="form-district" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500">
+                            <option value="Chiclayo">Chiclayo</option>
+                            <option value="José Leonardo Ortiz">José Leonardo Ortiz</option>
+                            <option value="La Victoria">La Victoria</option>
+                            <option value="Miraflores (Lima)">Miraflores (Lima)</option>
+                            <option value="Arequipa Centro">Arequipa Centro</option>
+                            <option value="Cusco Central">Cusco Central</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Nivel de Gravedad *</label>
+                        <select id="form-urgency" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 font-medium">
+                            <option value="Pendiente">Normal (Pendiente)</option>
+                            <option value="Urgente">Alta Prioridad / Peligro (Urgente)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Dirección exacta o referencia *</label>
+                    <input type="text" id="form-address" required placeholder="Ej. Av. Balta intersección con Av. Bolognesi" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Descripción detallada *</label>
+                    <textarea id="form-description" required rows="3" placeholder="Explica la situación para orientar a la municipalidad o empresa correspondiente..." class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+
+                <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-start space-x-2 text-[11px] text-blue-800">
+                    <i data-lucide="lock" class="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5"></i>
+                    <span>Tus datos personales están protegidos conforme a la Ley N° 29733 de Protección de Datos Personales del Perú. Se publicará la incidencia de forma anónima.</span>
+                </div>
+
+                <div class="flex space-x-3 pt-2">
+                    <button type="button" onclick="closeNewReportModal()" class="w-1/2 py-2.5 rounded-xl border border-slate-300 text-slate-600 font-semibold hover:bg-slate-50 transition">Cancelar</button>
+                    <button type="submit" class="w-1/2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition shadow-lg">Publicar Reporte</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL DETALLE DE INCIDENCIA -->
+    <div id="modal-detail" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[2000] hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
+            <div id="modal-detail-content">
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl z-[3000] hidden flex items-center space-x-3 border border-slate-700 text-xs">
+        <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400"></i>
+        <span id="toast-message">Acción realizada con éxito</span>
+    </div>
+
+    <script>
+        let currentRole = 'citizen';
+        let map;
+        let markersGroup;
+        let selectedUploadedImage = null;
+        let categoryChartInstance = null;
+        let trendChartInstance = null;
+
+        let reportsData = [
+            {
+                id: "PR-2026-0891",
+                category: "Pistas y Vías",
+                title: "Hueco de gran dimensión en av. principal",
+                description: "Gran bache que abarca medio carril. Ya ha provocado el daño de llantas en dos vehículos esta mañana.",
+                address: "Av. José Balta 1240, Chiclayo",
+                district: "Chiclayo",
+                department: "Lambayeque",
+                lat: -6.7713,
+                lng: -79.8409,
+                status: "Urgente",
+                confirmations: 42,
+                userConfirmed: false,
+                date: "06/11/2026 08:30 AM",
+                image: "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=600&q=80",
+                author: "Vecino Vigilante",
+                history: [
+                    { status: "Reportado", date: "06/11/2026 08:30 AM", note: "Reporte registrado por ciudadano" }
+                ]
+            },
+            {
+                id: "PR-2026-0885",
+                category: "Agua y Desagüe",
+                title: "Colapso de alcantarillado con aguas servidas",
+                description: "Afloramiento de aguas residuales frente a mercado local. Genera malos olores y riesgo sanitario extremo.",
+                address: "Av. Moshoqueque cdra 4",
+                district: "José Leonardo Ortiz",
+                department: "Lambayeque",
+                lat: -6.7580,
+                lng: -79.8350,
+                status: "En proceso",
+                confirmations: 88,
+                userConfirmed: true,
+                date: "05/11/2026 14:15 PM",
+                image: "https://images.unsplash.com/photo-1584467735871-8e85353a8413?auto=format&fit=crop&w=600&q=80",
+                author: "Anónimo",
+                history: [
+                    { status: "Reportado", date: "05/11/2026 14:15 PM", note: "Reporte registrado por ciudadano" },
+                    { status: "Derivado", date: "05/11/2026 16:00 PM", note: "Notificado a EPSEL Lambayeque" },
+                    { status: "En proceso", date: "06/11/2026 09:00 AM", note: "Cuadrilla técnica movilizada al sector" }
+                ]
+            },
+            {
+                id: "PR-2026-0872",
+                category: "Alumbrado Eléctrico",
+                title: "Poste de luz sin alumbrado en parque infantil",
+                description: "Zona muy oscura durante la noche, propensa a inseguridad ciudadana. Se requiere cambio de luminaria LED.",
+                address: "Calle Los Mochicas s/n",
+                district: "La Victoria",
+                department: "Lambayeque",
+                lat: -6.7890,
+                lng: -79.8460,
+                status: "Pendiente",
+                confirmations: 15,
+                userConfirmed: false,
+                date: "04/11/2026 19:40 PM",
+                image: "https://images.unsplash.com/photo-1509114397022-ed747cca3f65?auto=format&fit=crop&w=600&q=80",
+                author: "María L.",
+                history: [
+                    { status: "Reportado", date: "04/11/2026 19:40 PM", note: "Reporte registrado por ciudadano" }
+                ]
+            },
+            {
+                id: "PR-2026-0810",
+                category: "Limpieza y Basura",
+                title: "Acumulación de residuos sólidos en esquina",
+                description: "Desmonte y residuos acumulados por más de 3 días cerca a colegio de educación primaria.",
+                address: "Jr. Larco Herrera 450",
+                district: "Chiclayo",
+                department: "Lambayeque",
+                lat: -6.7650,
+                lng: -79.8480,
+                status: "Solucionado",
+                confirmations: 31,
+                userConfirmed: false,
+                date: "01/11/2026 10:00 AM",
+                image: "https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=600&q=80",
+                author: "Jorge V.",
+                history: [
+                    { status: "Reportado", date: "01/11/2026 10:00 AM", note: "Registrado" },
+                    { status: "En proceso", date: "02/11/2026 08:00 AM", note: "Camión recolector asignado" },
+                    { status: "Solucionado", date: "02/11/2026 12:30 PM", note: "Limpieza completada por la MPCH" }
+                ]
+            }
+        ];
+
+        window.onload = function() {
+            lucide.createIcons();
+            initMap();
+            renderReportsList();
+            renderMuniTable();
+            updateKPIs();
+            initCharts();
+        };
+
+        function initMap() {
+            map = L.map('map').setView([-6.7713, -79.8409], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
+
+            markersGroup = L.layerGroup().addTo(map);
+            renderMapMarkers();
+        }
+
+        function getStatusColor(status) {
+            switch(status) {
+                case 'Urgente': return '#EF4444';
+                case 'Pendiente': return '#F59E0B';
+                case 'En evaluación': return '#3B82F6';
+                case 'En proceso': return '#8B5CF6';
+                case 'Solucionado': return '#10B981';
+                default: return '#64748B';
+            }
+        }
+
+        function renderMapMarkers() {
+            markersGroup.clearLayers();
+            const filtered = getFilteredReports();
+
+            filtered.forEach(rep => {
+                const color = getStatusColor(rep.status);
+                const isUrgent = rep.status === 'Urgente';
+
+                const customIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `
+                        <div style="background-color: ${color}; width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);" 
+                             class="flex items-center justify-center text-white ${isUrgent ? 'urgent-pulse' : ''}">
+                             <div style="width: 8px; height: 8px; background-color: white; border-radius: 50%;"></div>
+                        </div>
+                    `,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+
+                const marker = L.marker([rep.lat, rep.lng], { icon: customIcon });
+
+                const popupContent = `
+                    <div class="text-xs p-1 max-w-xs font-sans">
+                        <img src="${rep.image}" class="w-full h-24 object-cover rounded-lg mb-2" onerror="this.src='https://placehold.co/300x200/0F172A/FFF?text=Foto'">
+                        <span class="text-[9px] uppercase font-bold px-2 py-0.5 rounded text-white" style="background-color: ${color}">
+                            ${rep.status}
+                        </span>
+                        <h4 class="font-bold text-slate-800 text-sm mt-1.5 leading-tight">${rep.title}</h4>
+                        <p class="text-slate-500 text-[11px] mt-1">${rep.address}</p>
+                        <div class="mt-2 pt-2 border-t flex justify-between items-center">
+                            <span class="text-slate-400 text-[10px]">${rep.confirmations} apoyos</span>
+                            <button onclick="openDetailModal('${rep.id}')" class="text-blue-600 hover:underline font-bold text-[11px]">Ver Detalle →</button>
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+                markersGroup.addLayer(marker);
+            });
+        }
+
+        function getFilteredReports() {
+            const search = document.getElementById('search-input').value.toLowerCase();
+            const cat = document.getElementById('filter-category').value;
+            const stat = document.getElementById('filter-status').value;
+            const dist = document.getElementById('filter-district').value;
+
+            return reportsData.filter(r => {
+                const matchesSearch = r.title.toLowerCase().includes(search) || 
+                                      r.id.toLowerCase().includes(search) || 
+                                      r.address.toLowerCase().includes(search);
+                const matchesCat = cat === 'ALL' || r.category === cat;
+                const matchesStat = stat === 'ALL' || r.status === stat;
+                const matchesDist = dist === 'ALL' || r.district === dist;
+
+                return matchesSearch && matchesCat && matchesStat && matchesDist;
+            });
+        }
+
+        function filterReports() {
+            renderReportsList();
+            renderMapMarkers();
+        }
+
+        function renderReportsList() {
+            const listEl = document.getElementById('reports-list');
+            const countEl = document.getElementById('reports-count');
+            const filtered = getFilteredReports();
+
+            countEl.textContent = filtered.length;
+            listEl.innerHTML = '';
+
+            filtered.forEach(rep => {
+                const color = getStatusColor(rep.status);
+                
+                const card = document.createElement('div');
+                card.className = "bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm hover:shadow-md transition cursor-pointer relative overflow-hidden group";
+                card.onclick = () => focusOnMap(rep.lat, rep.lng, rep.id);
+
+                card.innerHTML = `
+                    <div class="flex items-start space-x-3">
+                        <img src="${rep.image}" class="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-slate-100" onerror="this.src='https://placehold.co/100x100/0F172A/FFF?text=Foto'">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex justify-between items-start">
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded text-white" style="background-color: ${color}">
+                                    ${rep.status}
+                                </span>
+                                <span class="text-[10px] font-mono text-slate-400">${rep.id}</span>
+                            </div>
+                            <h4 class="font-bold text-slate-800 text-xs mt-1 truncate group-hover:text-blue-600 transition">${rep.title}</h4>
+                            <p class="text-[11px] text-slate-500 truncate">${rep.address}</p>
+                            
+                            <div class="flex justify-between items-center mt-2 text-[10px] text-slate-400 border-t pt-1.5">
+                                <span class="flex items-center space-x-1">
+                                    <i data-lucide="thumbs-up" class="w-3 h-3 text-slate-400"></i>
+                                    <span class="font-semibold text-slate-600">${rep.confirmations}</span> vecinos
+                                </span>
+                                <button onclick="event.stopPropagation(); openDetailModal('${rep.id}')" class="text-blue-600 font-bold hover:underline">Detalles</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+
+            lucide.createIcons();
+        }
+
+        function focusOnMap(lat, lng, id) {
+            map.flyTo([lat, lng], 16, { animate: true, duration: 1 });
+            setTimeout(() => {
+                markersGroup.eachLayer(layer => {
+                    if (layer.getLatLng().lat === lat && layer.getLatLng().lng === lng) {
+                        layer.openPopup();
+                    }
+                });
+            }, 1000);
+        }
+
+        function openDetailModal(id) {
+            const rep = reportsData.find(r => r.id === id);
+            if (!rep) return;
+
+            const modal = document.getElementById('modal-detail');
+            const content = document.getElementById('modal-detail-content');
+            const color = getStatusColor(rep.status);
+
+            let historyHtml = rep.history.map(h => `
+                <div class="flex space-x-3 text-xs">
+                    <div class="flex flex-col items-center">
+                        <div class="w-2.5 h-2.5 rounded-full bg-blue-600 mt-1"></div>
+                        <div class="w-0.5 flex-1 bg-slate-200"></div>
+                    </div>
+                    <div class="pb-3">
+                        <span class="font-bold text-slate-700">${h.status}</span>
+                        <span class="text-[10px] text-slate-400 ml-2">${h.date}</span>
+                        <p class="text-slate-500 text-[11px] mt-0.5">${h.note}</p>
+                    </div>
+                </div>
+            `).join('');
+
+            content.innerHTML = `
+                <div class="bg-brand-navy text-white px-6 py-4 flex justify-between items-center">
+                    <div>
+                        <span class="text-[10px] font-mono text-slate-400">CÓDIGO: ${rep.id}</span>
+                        <h3 class="font-bold text-base mt-0.5">${rep.title}</h3>
+                    </div>
+                    <button onclick="closeDetailModal()" class="text-slate-400 hover:text-white">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <div class="p-6 overflow-y-auto space-y-4 max-h-[75vh] custom-scrollbar text-xs">
+                    <div class="relative rounded-xl overflow-hidden bg-slate-900 h-48">
+                        <img src="${rep.image}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/600x400/0F172A/FFF?text=Foto'">
+                        <span class="absolute top-3 left-3 text-xs font-bold px-3 py-1 rounded-full text-white shadow-md" style="background-color: ${color}">
+                            Estado: ${rep.status}
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <div>
+                            <span class="text-slate-400 text-[10px] uppercase font-bold">Distrito</span>
+                            <p class="font-semibold text-slate-800">${rep.district}, ${rep.department}</p>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 text-[10px] uppercase font-bold">Categoría</span>
+                            <p class="font-semibold text-slate-800">${rep.category}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold text-slate-800 mb-1">Descripción:</h4>
+                        <p class="text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">${rep.description}</p>
+                    </div>
+
+                    <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between">
+                        <div>
+                            <span class="font-bold text-amber-900 block text-xs">Confirmación Vecinal</span>
+                            <span class="text-amber-700 text-[11px]">${rep.confirmations} vecinos lo respaldan.</span>
+                        </div>
+                        <button onclick="toggleConfirm('${rep.id}')" class="px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm ${rep.userConfirmed ? 'bg-emerald-600 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'}">
+                            ${rep.userConfirmed ? '¡Confirmado!' : 'Respaldar'}
+                        </button>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold text-slate-800 mb-2">Historial Oficial:</h4>
+                        <div class="pl-2">
+                            ${historyHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeDetailModal() {
+            document.getElementById('modal-detail').classList.add('hidden');
+        }
+
+        function toggleConfirm(id) {
+            const rep = reportsData.find(r => r.id === id);
+            if (!rep) return;
+
+            if (rep.userConfirmed) {
+                rep.confirmations--;
+                rep.userConfirmed = false;
+                showToast("Has retirado tu respaldo.");
+            } else {
+                rep.confirmations++;
+                rep.userConfirmed = true;
+                showToast("¡Respaldo agregado!");
+            }
+
+            renderReportsList();
+            openDetailModal(id);
+        }
+
+        function openNewReportModal() {
+            document.getElementById('modal-report').classList.remove('hidden');
+        }
+
+        function closeNewReportModal() {
+            document.getElementById('modal-report').classList.add('hidden');
+            document.getElementById('form-new-report').reset();
+        }
+
+        function triggerFileInput() {
+            document.getElementById('form-image-input').click();
+        }
+
+        function previewImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    selectedUploadedImage = e.target.result;
+                    document.getElementById('image-preview-container').innerHTML = `
+                        <img src="${e.target.result}" class="h-28 mx-auto rounded-lg object-cover shadow">
+                    `;
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function handleCreateReport(e) {
+            e.preventDefault();
+            const cat = document.getElementById('form-category').value;
+            const dist = document.getElementById('form-district').value;
+            const urgency = document.getElementById('form-urgency').value;
+            const address = document.getElementById('form-address').value;
+            const desc = document.getElementById('form-description').value;
+
+            const newId = `PR-2026-0${Math.floor(100 + Math.random() * 900)}`;
+
+            const newReport = {
+                id: newId,
+                category: cat,
+                title: `${cat} en ${address}`,
+                description: desc,
+                address: address,
+                district: dist,
+                department: 'Lambayeque',
+                lat: -6.7713 + (Math.random() - 0.5) * 0.02,
+                lng: -79.8409 + (Math.random() - 0.5) * 0.02,
+                status: urgency,
+                confirmations: 1,
+                userConfirmed: true,
+                date: new Date().toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }),
+                image: selectedUploadedImage || "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=600&q=80",
+                author: "Carlos M.",
+                history: [
+                    { status: "Reportado", date: new Date().toLocaleString('es-PE'), note: "Registrado desde la app" }
+                ]
+            };
+
+            reportsData.unshift(newReport);
+            closeNewReportModal();
+            filterReports();
+            renderMuniTable();
+            updateKPIs();
+            showToast(`¡Reporte ${newId} enviado a la Municipalidad!`);
+        }
+
+        function renderMuniTable() {
+            const tbody = document.getElementById('muni-table-body');
+            tbody.innerHTML = '';
+
+            reportsData.forEach(rep => {
+                const color = getStatusColor(rep.status);
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="p-3 font-mono font-bold text-slate-700">${rep.id}</td>
+                    <td class="p-3">
+                        <div class="font-bold text-slate-800">${rep.title}</div>
+                        <div class="text-[11px] text-slate-500">${rep.category}</div>
+                    </td>
+                    <td class="p-3 font-medium">${rep.district}</td>
+                    <td class="p-3 font-bold text-slate-700">👍 ${rep.confirmations}</td>
+                    <td class="p-3">
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded text-white" style="background-color: ${color}">
+                            ${rep.status}
+                        </span>
+                    </td>
+                    <td class="p-3 text-right">
+                        <select onchange="updateReportStatus('${rep.id}', this.value)" class="bg-white border border-slate-300 rounded-lg p-1 text-xs font-semibold">
+                            <option value="" disabled selected>Acción...</option>
+                            <option value="En evaluación">En evaluación</option>
+                            <option value="En proceso">Asignar Cuadrilla</option>
+                            <option value="Solucionado">Solucionado</option>
+                        </select>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateReportStatus(id, newStatus) {
+            const rep = reportsData.find(r => r.id === id);
+            if (!rep) return;
+            rep.status = newStatus;
+            filterReports();
+            renderMuniTable();
+            updateKPIs();
+            showToast(`Reporte ${id} actualizado a: ${newStatus}`);
+        }
+
+        function switchRole(role) {
+            currentRole = role;
+            document.getElementById('view-citizen').classList.toggle('hidden', role !== 'citizen');
+            document.getElementById('view-muni').classList.toggle('hidden', role !== 'muni');
+            document.getElementById('view-admin').classList.toggle('hidden', role !== 'admin');
+
+            if (role === 'citizen') setTimeout(() => map.invalidateSize(), 200);
+            if (role === 'admin') updateCharts();
+        }
+
+        function updateKPIs() {
+            document.getElementById('muni-kpi-total').textContent = reportsData.length;
+            document.getElementById('muni-kpi-pending').textContent = reportsData.filter(r => r.status === 'Pendiente' || r.status === 'Urgente').length;
+            document.getElementById('muni-kpi-process').textContent = reportsData.filter(r => r.status === 'En proceso' || r.status === 'En evaluación').length;
+            document.getElementById('muni-kpi-solved').textContent = reportsData.filter(r => r.status === 'Solucionado').length;
+
+            document.getElementById('saas-total-reports').textContent = reportsData.length;
+            const solved = reportsData.filter(r => r.status === 'Solucionado').length;
+            document.getElementById('saas-resolution-rate').textContent = `${Math.round((solved / reportsData.length) * 100)}%`;
+        }
+
+        function initCharts() {
+            const ctxCat = document.getElementById('categoryChart').getContext('2d');
+            categoryChartInstance = new Chart(ctxCat, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Pistas', 'Agua/Desagüe', 'Limpieza', 'Alumbrado', 'Otros'],
+                    datasets: [{
+                        data: [1, 1, 1, 1, 0],
+                        backgroundColor: ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const ctxTrend = document.getElementById('trendChart').getContext('2d');
+            trendChartInstance = new Chart(ctxTrend, {
+                type: 'line',
+                data: {
+                    labels: ['Ago', 'Set', 'Oct', 'Nov'],
+                    datasets: [{
+                        label: 'Incidencias',
+                        data: [15, 30, 45, reportsData.length],
+                        borderColor: '#3B82F6',
+                        fill: true
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        function updateCharts() {
+            if (categoryChartInstance) categoryChartInstance.update();
+            if (trendChartInstance) trendChartInstance.update();
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3500);
+        }
+
+        function exportData() {
+            let csv = "Codigo,Categoria,Titulo,Distrito,Estado\n";
+            reportsData.forEach(r => {
+                csv += `"${r.id}","${r.category}","${r.title}","${r.district}","${r.status}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", `PeruResuelve_Reportes.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("Reporte CSV exportado correctamente.");
+        }
+    </script>
+</body>
+</html>
