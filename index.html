@@ -12,10 +12,20 @@
     
     <!-- Etiqueta de Verificación de Google Search Console -->
     <meta name="google-site-verification" content="iXZEEyu-t9mtbRCeyJWSXxWWW8NTALUO1k0YwG3UrxM" />
-    <!-- Configuración PWA -->
+<!-- Configuración PWA -->
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#0F172A">
 <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/535/535239.png">
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('PWA Service Worker registrado:', reg.scope))
+        .catch(err => console.error('Error Service Worker:', err));
+    });
+  }
+</script>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
