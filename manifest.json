@@ -1,8 +1,10 @@
 {
+  "id": "peru-resuelve-app",
   "name": "PERÚ RESUELVE",
   "short_name": "Perú Resuelve",
   "description": "Plataforma Nacional de Incidencias Urbanas para reportar problemas en tu ciudad.",
-  "start_url": "./index.html",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#F8FAFC",
   "theme_color": "#0F172A",
